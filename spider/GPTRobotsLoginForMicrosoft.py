@@ -58,9 +58,10 @@ class GPTLogin(GPTBase):
         """
         从失败的临时表中获取数据 获取原则：没有hostname + 没有port的
         """
+        test_email = None
         # test_email = "xopgafgwef40@hotmail.com"
         # test_email = "tclpyddgtw61@hotmail.com"
-        test_email = "zhpaxvyrmb91@hotmail.com"
+        # test_email = "zhpaxvyrmb91@hotmail.com"
         product = MSessionQueue.get_unsync_data(test_std_email=test_email)
         return product
 
@@ -311,15 +312,15 @@ class GPTLogin(GPTBase):
         # 自动化人工校验
         # 如果检测到已经登录成功，则无需要人工校验了
         # 这里不再做人工校验失败的判断。因为有可能能直接拿到登录信息
-        self.pageAction.auto_robots()
 
-        self.pageAction.about_you_init()
-
-        self.pageAction.auto_robots()
 
         # 连续刷新三次获取
         retry_idx = 0
         while True:
+            self.pageAction.auto_robots()
+            self.pageAction.about_you_init()
+            self.pageAction.auto_robots()
+
             retry_idx = retry_idx + 1
             if retry_idx > 4:
                 self.sysLog.log("current login failed!")

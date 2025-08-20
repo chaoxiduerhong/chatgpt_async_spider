@@ -67,7 +67,7 @@ class SessionQueueModel(BaseModel):
         # }
 
         save_data = {"$set": {"sync_status": "running", 'ready_login_ts': common.ts()}}
-
+        print(condition)
         res = self.lock_find_one_and_update(
             condition,
             save_data,
@@ -90,6 +90,8 @@ class SessionQueueModel(BaseModel):
                         {"login_status": "invalid"}
                     ]
                 }
+
+            print(condition)
             res = self.lock_find_one_and_update(
                 condition,
                 save_data,
