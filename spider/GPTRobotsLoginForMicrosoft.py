@@ -58,9 +58,9 @@ class GPTLogin(GPTBase):
         """
         从失败的临时表中获取数据 获取原则：没有hostname + 没有port的
         """
-        test_email = "xopgafgwef40@hotmail.com"
+        # test_email = "xopgafgwef40@hotmail.com"
         # test_email = "tclpyddgtw61@hotmail.com"
-        # zhpaxvyrmb91@hotmail.com
+        test_email = "zhpaxvyrmb91@hotmail.com"
         product = MSessionQueue.get_unsync_data(test_std_email=test_email)
         return product
 
@@ -143,7 +143,7 @@ class GPTLogin(GPTBase):
             utils.common.action_wait(3000, 10000)
 
 
-            if self.pageAction.check_email_recovery_identifier():
+            if self.pageAction.check_email_recovery_identifier() or self.pageAction.login_step_check_identity():
                 retry_mark = "check_email_recovery_identifier"
                 self.sysLog.log(f"{retry_mark},checked current account disabled2")
                 MSession.update_login_status_disabled(product['std_email'])
@@ -158,6 +158,9 @@ class GPTLogin(GPTBase):
                 return False
             else:
                 print("没有检测到输入验证码")
+
+
+
 
             # 一般应该不会触发该问题
             if self.pageAction.auto_restart_button():
@@ -217,6 +220,23 @@ class GPTLogin(GPTBase):
                 retry_mark = "login_step_input_password_next"
                 self.sysLog.log(f"{retry_mark}...")
                 if not self.pageAction.login_step_input_password_next():
+                    self.sysLog.log(f"{retry_mark} failed, retry...")
+                    retry_num = retry_num + 1
+                    continue
+                self.sysLog.log(f"{retry_mark} complete！")
+
+            elif self.pageAction.login_step_check_correction():
+                retry_mark = "login_step_correction"
+                self.sysLog.log(f"{retry_mark}...")
+                if not self.pageAction.login_step_correction():
+                    self.sysLog.log(f"{retry_mark} failed, retry...")
+                    retry_num = retry_num + 1
+                    continue
+                self.sysLog.log(f"{retry_mark} complete！")
+            elif self.pageAction.login_step_check_interrupt():
+                retry_mark = "login_step_interrupt"
+                self.sysLog.log(f"{retry_mark}...")
+                if not self.pageAction.login_step_interrupt():
                     self.sysLog.log(f"{retry_mark} failed, retry...")
                     retry_num = retry_num + 1
                     continue

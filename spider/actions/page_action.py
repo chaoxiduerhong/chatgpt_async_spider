@@ -756,6 +756,69 @@ class PageAction:
         except:
             return False
 
+    def login_step_check_correction(self):
+        """
+        检测矫正信息
+        """
+        try:
+            if "proofs/remind" in self.driver.current_url:
+                return True
+            return False
+        except:
+            return False
+
+    def login_step_correction(self):
+        """
+        矫正信息： 点击 看起来不错
+        """
+        try:
+            good_div = WebDriverWait(self.driver, 5).until(
+                EC.presence_of_element_located((By.ID, "iLooksGood"))
+            )
+            time.sleep(2)
+            good_div.click()
+            time.sleep(2)
+            return True
+        except:
+            return False
+
+    def login_step_check_identity(self):
+        """
+        验证码：检测到验证码。
+        检测到后该账号自动登录被废（无法自动化实现这块）
+        """
+        try:
+            if "identity/confirm" in self.driver.current_url:
+                return True
+            return False
+        except:
+            return False
+
+    def login_step_check_interrupt(self):
+        """
+        是否开启人脸 指纹等识别校验
+
+        """
+        try:
+            if "interrupt/passkey" in self.driver.current_url:
+                return True
+            return False
+        except:
+            return False
+
+    def login_step_interrupt(self):
+        """
+        是否开启人脸 指纹等识别校验
+
+        """
+        try:
+            login_btn = WebDriverWait(self.driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-testid="secondaryButton"]')))
+            login_btn.click()
+            return True
+        except:
+            return False
+
     def auto_accept_cookie(self):
         """
         接收cookie弹窗
