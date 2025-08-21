@@ -582,9 +582,15 @@ class PageAction:
         检测保持登录状态
         """
         try:
+            # 如果url正确 直接返回
             if "ppsecure/post.srf" in self.driver.current_url:
                 return True
-            return False
+
+            # 如果有特定元素，也可以直接返回True。 有时候页面跳转了 url不变化
+            WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'form[action*="ppsecure/post.srf"]')))
+
+            return True
         except:
             return False
 

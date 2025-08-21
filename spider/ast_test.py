@@ -1396,6 +1396,57 @@ def check_login_auth():
         print("check_login_auth error")
     return False
 
-check_login_auth()
+
+def login_step_check_interrupt():
+    """
+    是否开启人脸 指纹等识别校验
+
+    """
+    try:
+        driver = get_driver(9700)
+        if "interrupt/passkey" in driver.current_url:
+            return True
+        return False
+    except:
+        return False
+
+
+def login_step_interrupt():
+    """
+    是否开启人脸 指纹等识别校验
+
+    """
+    try:
+        driver = get_driver(9700)
+        login_btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-testid="secondaryButton"]')))
+        login_btn.click()
+        return True
+    except:
+        return False
+
+
+def login_step_check_keep_login_status():
+    """
+    检测保持登录状态
+    """
+    try:
+        print(1)
+        driver = get_driver(9701)
+        # 如果url正确 直接返回
+        print(2)
+        if "ppsecure/post.srf" in driver.current_url:
+            return True
+
+        print(4)
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'form[action*="ppsecure/post.srf"]')))
+
+        return True
+    except:
+        print(traceback.format_exc())
+        return False
+
+print(login_step_check_keep_login_status())
 print("end")
 time.sleep(100000)
