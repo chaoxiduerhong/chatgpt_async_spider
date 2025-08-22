@@ -5,7 +5,7 @@ from utils import env
 
 
 class appConf:
-    debug: bool = env("DEBUG", True)
+    debug: bool = bool(env("DEBUG", 0))
 
     """
     计划任务最小运行周期。单位秒

@@ -141,7 +141,6 @@ class WDriver:
                 self.waiting(60)
                 return False
             try:
-                print("--1111-------")
                 self.chrome_options = Options()
                 # TODO 后期调研该设置的必要性
                 self.chrome_options.ignore_local_proxy_environment_variables()
@@ -151,10 +150,8 @@ class WDriver:
                     driverPath = self.bit_driver_path
                     debuggerAddress = self.bit_http
 
-                    print("---------")
                     print(debuggerAddress)
                     print(driverPath)
-                    print("---------")
 
                     self.chrome_options.add_experimental_option("debuggerAddress",debuggerAddress)
                     chrome_service = Service(driverPath)
@@ -167,7 +164,6 @@ class WDriver:
                 # 配置拦截器： 不同的网站需要配置不同的拦截器。  比如 perplexity 上报触发人工校验： cookie `cf_clearance`
                 # self.driver.execute_cdp_cmd('Network.setBlockedURLs', {"urls": ["www.perplexity.ai/cdn-cgi/challenge-platform/*"]})
                 # self.driver.execute_cdp_cmd('Network.enable', {})
-                print("--2222-------")
                 self.driver_interceptor()
 
                 # TODO 后期方案： 隐藏webdirver,
@@ -182,7 +178,6 @@ class WDriver:
                 self.waiting(1)
                 self.close_other_tab()
                 self.driver.get(gpt_conf.driver_default_page)
-                print("--3333-------")
                 return True
             except:
                 err_msg = str(traceback.format_exc())

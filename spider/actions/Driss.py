@@ -90,7 +90,7 @@ class Driss:
         try:
             dom = self.driver. \
                 ele((By.CSS_SELECTOR, 'div.main-wrapper[role="main"]')). \
-                ele((By.TAG_NAME, "div")).shadow_root. \
+                ele((By.CSS_SELECTOR, "div[id]")).ele((By.TAG_NAME, "div")).ele((By.TAG_NAME, "div")).shadow_root. \
                 ele((By.TAG_NAME, "iframe")).ele((By.TAG_NAME, "body")).shadow_root. \
                 ele((By.TAG_NAME, "input"))
             dom.click()

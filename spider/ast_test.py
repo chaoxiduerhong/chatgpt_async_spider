@@ -42,16 +42,17 @@ def auto_robots():
     """
     自动化人工点击
     """
-    driver = getDissDriver(9700)
+    driver = getDissDriver(9600)
+    time.sleep(1)
     try:
         dom = driver. \
-            ele((By.ID, "cf-turnstile")). \
-            ele((By.TAG_NAME, "div")).shadow_root. \
+            ele((By.CSS_SELECTOR, 'div.main-wrapper[role="main"]')). \
+            ele((By.CSS_SELECTOR, "div[id]")).ele((By.TAG_NAME, "div")).ele((By.TAG_NAME, "div")).shadow_root. \
             ele((By.TAG_NAME, "iframe")).ele((By.TAG_NAME, "body")).shadow_root. \
             ele((By.TAG_NAME, "input"))
+
         dom.click()
-        return True
-    except:
+    except Exception as e:
         print(traceback.format_exc())
         return False
 
@@ -79,7 +80,6 @@ def get_driver(port, browser_host="127.0.0.1"):
     driver = webdriver.Chrome(options=chrome_options)
 
 
-    time.sleep(5)
     return driver
 
 
@@ -242,26 +242,26 @@ def ask_js(ask_msg):
     """
     print("---------1---")
     try:
+        ask_msg = "请帮我计算 345234+2313=?"
         driver = get_driver(9600)
-        auto_robots()
         # 后期可以关闭，当前用于调试信息
         ask_msg_list = ask_msg.strip().split("\n")
         time.sleep(1)
         # 模拟手工输入操作
         time.sleep(5)
-        input_box = get_chat_input()
+        input_box = driver.find_element(By.ID, "prompt-textarea")
         print("========333===")
         if input_box:
             # 先清空输入框
             print("========444===")
             driver.execute_script("arguments[0].textContent = '';", input_box)
-            driver.execute_script(f"arguments[0].value = `{ask_msg}`;", input_box)
+            driver.execute_script(f"arguments[0].textContent = `{ask_msg}`;", input_box)
             # 输入完毕，输入enter 获取点击相关按钮。这里当前按输入enter来确认
             input_box.send_keys(" ")
             time.sleep(2)
             print("========555===")
             input_box.send_keys(Keys.CONTROL, Keys.ENTER)
-            auto_robots()
+
             return True
         else:
             return False
@@ -508,7 +508,7 @@ def get_chat_input():
     """
     try:
         driver = get_driver(9600)
-        parent_box = driver.find_element(By.ID, "userInput")
+        parent_box = driver.find_element(By.ID, "prompt-textarea")
         return parent_box
 
     except Exception as e:
@@ -1447,6 +1447,84 @@ def login_step_check_keep_login_status():
         print(traceback.format_exc())
         return False
 
-print(login_step_check_keep_login_status())
+
+def get_current_model():
+    """
+    获取当前模型
+    """
+    try:
+        driver = get_driver(9600)
+        # 点击切换模型按钮
+        wait = WebDriverWait(driver, 2)
+        btn = wait.until(EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, 'button[data-is-selected="true"]')
+        ))
+        text = btn.text.strip().lower()
+        if "study" in text or "学习" in text: # Fast
+            return "study"
+        elif "think" in text or "思考" in text: # Think Deeper
+            return "think"
+        elif "research" in text or "研究" in text: # GPT-5
+            return "research"
+        print(text)
+        return "default"
+    except Exception as e:
+        print(traceback.format_exc())
+        return "default"
+
+
+def option_select_model(model_name="think"):
+    """
+    选择chatgpt 5 模型
+    """
+    # 点击切换模型按钮
+    driver = get_driver(9600)
+    wait = WebDriverWait(driver, 5)
+    try:
+        btn = wait.until(EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, 'button[data-testid="composer-plus-btn"]')
+        ))
+    except:
+        btn = wait.until(EC.element_to_be_clickable(
+            (By.ID, 'system-hint-button')
+        ))
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    btn.click()
+    time.sleep(2)
+    model_item = None
+    if model_name == "study":
+        model_item = wait.until(EC.element_to_be_clickable(
+            (By.XPATH,
+             '//div[@role="menuitemradio" and (contains(normalize-space(.), "学习") or contains(normalize-space(.), "Study"))]')
+        ))
+    elif model_name == "think":
+        model_item = wait.until(EC.element_to_be_clickable(
+            (By.XPATH,
+             '//div[@role="menuitemradio" and (contains(normalize-space(.), "思考") or contains(normalize-space(.), "Think"))]')
+        ))
+    elif model_name == "research":
+        model_item = wait.until(EC.element_to_be_clickable(
+            (By.XPATH,
+             '//div[@role="menuitemradio" and (contains(normalize-space(.), "深度") or contains(normalize-space(.), "deep"))]')
+        ))
+    if model_item:
+        driver.execute_script("arguments[0].click();", model_item)
+
+    return True
+
+
+def auto_start_chat():
+    """检测用户是否已经登录的标志"""
+    try:
+        driver = get_driver(9600)
+        time.sleep(2)
+        start_button = driver.find_element(By.XPATH, '//button[@data-testid="getting-started-button"]')
+        start_button.click()
+        return True
+    except:
+        print(traceback.format_exc())
+        return False
+
+auto_start_chat()
 print("end")
 time.sleep(100000)

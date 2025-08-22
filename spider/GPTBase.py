@@ -9,6 +9,7 @@ import json
 from selenium.webdriver.common.keys import Keys
 from config import gpt_conf
 import utils.common
+from utils import error_retry
 from models import MSession, MProxyQueue, MSessionLog
 from spider.actions.page_action import PageAction
 from urllib.parse import urlparse
@@ -227,7 +228,19 @@ class GPTBase:
         """
         copilot 比较复杂，没法进行正确的判断
         """
-        return True
+        if gpt_conf.auth_login_cert and gpt_conf.auth_login_cert['type'] == 'cookie':
+            sessions_data = sessions['cookie_data']
+            if gpt_conf.auth_login_cert['key'] in sessions_data:
+                return True
+            return False
+        elif gpt_conf.auth_login_cert and gpt_conf.auth_login_cert['type'] == 'localstorage':
+            sessions_data = sessions['localstorage_data']
+            for key in sessions_data:
+                if gpt_conf.auth_login_cert['key'] == sessions_data[key]:
+                    return True
+            return False
+        else:
+            return True
 
     def add_account_log(self, action_type, action_info, account=None):
         """
@@ -254,8 +267,6 @@ class GPTBase:
         设置token不需要检测用户是否登录。接口获取到后直接干
         """
         # 捕获页面加载异常的情况
-
-
         idx = 0
         while True:
             idx = idx + 1
@@ -286,13 +297,14 @@ class GPTBase:
                         session_token = session_response['session']
                         self.sysLog.log("获取到下发的账号 account:%s; data_type:%s" % (session_response['session_key'], session_response['data_type']))
 
-                        if self.check_session_token(session_token):
+                        if self.check_session_token(session_response):
                             self.sysLog.log("下发账号的关键字段校验正常")
                         else:
                             self.sysLog.log("发的账号信息可能有问题,丢失等重要字段")
                             MSession.update_one(data={"sync_status": "error"}, condition={"account": session_response['session_key']})
                             continue
                     except:
+                        print(traceback.format_exc())
                         self.sysLog.log("获取到账号数据，解析异常")
                         self.waiting(2)
                         continue
@@ -303,17 +315,14 @@ class GPTBase:
 
                     # 设置
                     self.sysLog.log("正在进行登录...")
-                    if "localstorage" in gpt_conf.auth_login_mode and session_response['localstorage_data']:
-                        localstorage_data = session_response['localstorage_data']
-                        print(localstorage_data, "=======================")
-                        for key in session_response['localstorage_data']:
-                            print(key, "=======================")
-                            print(f"update localstorage: {key} => {localstorage_data[key]}")
-                            self.driver.execute_script(f"localStorage.setItem({repr(key)}, {repr(localstorage_data[key])})")
 
-                    if "cookie" in gpt_conf.auth_login_mode and session_response['cookie_data']:
-                        for cookie_item in session_response['cookie_data']:
-                            self.driver.add_cookie(cookie_item)
+                    self.driver.add_cookie({
+                        "name": "__Secure-next-auth.session-token",
+                        "value": session_response['cookie_data']['__Secure-next-auth.session-token'],
+                        "domain": ".chatgpt.com",
+                        "path": "/",
+                        "secure": True
+                    })
 
                     self.waiting(1)  # 等页面加载
 
@@ -326,7 +335,7 @@ class GPTBase:
                     self.pageAction.switch_to_chat_page()
 
                     self.waiting(5)
-                    if self.pageAction.get_login_mark():
+                    if self.pageAction.check_login_auth():
                         self.session_key = session_response['session_key']
                         self.sysLog.log("检测登录成功, account:%s" % self.session_key)
                         self.add_account_log(
@@ -334,7 +343,7 @@ class GPTBase:
                             action_info="通过cookie登录成功"
                         )
 
-                        self.session_token = session_token
+                        self.session_token = session_response['cookie_data']['__Secure-next-auth.session-token']
                         MSession.update_success_num(self.session_key)
                         if "localstorage" in gpt_conf.auth_login_mode:
                             localstorage_session_token = self.pageAction.get_local_storage_data()
@@ -382,9 +391,7 @@ class GPTBase:
         req_url = f"{gpt_conf.remote_server_for_login}/proxy_issue_for_login"
         print( f"api_proxy_issue_for_login: {req_url}")
 
-        print("get proxy START------------")
         resp = requests.get(url=req_url, timeout=15)
-        print("get proxy END------------")
         resp_json = json.loads(resp.content)
         return resp, resp_json
 
@@ -507,13 +514,17 @@ class GPTBase:
                 proxy_port = self.browser_proxy['port']
                 proxy_address = f"http://{gpt_conf.proxy_host}:{proxy_port}"
 
+                print(proxy_address)
+
                 url = "https://chatgpt.com"
                 response = requests.get(url, verify=False,
                                         proxies={"http": proxy_address, "https": proxy_address}, timeout=15, headers={ "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"})
                 if response.status_code == 200:
                     return True
+                print("check_proxy_status response.status_code:", response.status_code)
                 return False
             except:
+                print(traceback.format_exc())
                 return False
 
 
@@ -539,7 +550,7 @@ class GPTBase:
                 self.pageAction.auto_robots()
                 # 先清空输入框
                 self.driver.execute_script("arguments[0].textContent = '';", input_box)
-                self.driver.execute_script(f"arguments[0].value = `{ask_msg}`;", input_box)
+                self.driver.execute_script(f"arguments[0].textContent = `{ask_msg}`;", input_box)
                 # 输入完毕，输入enter 获取点击相关按钮。这里当前按输入enter来确认
                 input_box.send_keys(" ")
                 self.sysLog.log("click ENTER KEY")
@@ -609,7 +620,7 @@ class GPTBase:
 
     def get_url_uuid(self):
         """
-        回答问题的地址：https://www.perplexity.ai/search/4eb063c1-475c-4cb7-930f-c315f34b519b
+        回答问题的地址：https://chatgpt.com/c/68a6941c-19c4-8329-8fc5-aa873346fd86
         获取url部分并且search 存在，uuid 存在
         uuid 长度36
         """
@@ -623,9 +634,9 @@ class GPTBase:
                 parsed_url = urlparse(current_url)
                 path = parsed_url.path.strip().strip("/")
                 url_attrs = path.split('/')
-                if is_success and "chats/" in path and len(url_attrs) >= 2:
+                if is_success and "c/" in path and len(url_attrs) >= 2:
                     return current_url, url_attrs[-1]
-                elif "chats/" in path and len(url_attrs) >= 2:
+                elif "c/" in path and len(url_attrs) >= 2:
                     is_success = True
                     self.waiting(3)
                 else:

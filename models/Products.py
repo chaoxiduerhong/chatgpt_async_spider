@@ -23,7 +23,7 @@ class ProductsModel(BaseModel):
 
     def getFirstProduct(self, bid, client_max_bid):
         """
-        获取第一个产品
+        获取第一个产品 std_content_obj
         """
         result = self.get(
             start=0,

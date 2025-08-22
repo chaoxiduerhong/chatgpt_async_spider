@@ -14,6 +14,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from utils import error_retry
 import utils.common
 from spider.logs.syslog import SysLog
 from config import gpt_conf
@@ -52,16 +53,10 @@ class PageAction:
         except Exception as e:
             print("调用waiting异常")
 
+    @error_retry(max_retries=3, recovery_methods=['auto_robots'], is_debug=False)
     def get_chat_input(self):
-        """
-        获取聊天框
-        最大等待5s
-        """
-        try:
-            parent_box = self.driver.find_element(By.ID, "userInput")
-            return parent_box
-        except Exception as e:
-            return None
+        parent_box = self.driver.find_element(By.ID, "prompt-textarea")
+        return parent_box
 
     def get_language_model(self):
         """
@@ -161,15 +156,16 @@ class PageAction:
         except:
             return False
 
+    @error_retry(max_retries=2, delay=5)
     def switch_to_chat_page(self):
         """
         设置token不需要检测用户是否登录。接口获取到后直接干
         """
-        try:
-            self.driver.get(gpt_conf.url)
+        current_url = self.driver.current_url.strip().strip("/")
+        if current_url == "https://chatgpt.com/?model=auto" or current_url == "https://chatgpt.com":
             return True
-        except:
-            return False
+        self.driver.get(gpt_conf.url)
+        return True
 
 
     def switch_to_login_page(self):
@@ -259,7 +255,7 @@ class PageAction:
 
 
     def check_chat_page(self):
-        return True if self.get_chat_input() else None
+        return True if self.get_chat_input() else False
 
 
     def check_cf_robots(self):
@@ -353,7 +349,7 @@ class PageAction:
         about 关于你，填写名称 生日
         """
         try:
-
+            self.driver.refresh()
             if "about-you" in self.driver.current_url:
                 login_btn = WebDriverWait(self.driver, 5).until(
                     EC.element_to_be_clickable((By.NAME, 'name')))
@@ -853,6 +849,17 @@ class PageAction:
         except:
             return False
 
+
+    def auto_start_chat(self):
+        """检测用户是否已经登录的标志"""
+        try:
+            time.sleep(2)
+            start_button = self.driver.find_element(By.XPATH, '//button[@data-testid="getting-started-button"]')
+            start_button.click()
+            return True
+        except:
+            return False
+
     def get_login_mark(self):
         """
         1. url以 https://copilot.microsoft.com/ 这个开头
@@ -869,7 +876,6 @@ class PageAction:
             cookies = self.driver.get_cookies()
             for cookie in cookies:
                 if cookie['name'] == "__Secure-next-auth.session-token":
-                    print("login success")
                     return True
             return False
         except:
@@ -910,19 +916,16 @@ class PageAction:
             # 点击切换模型按钮
             wait = WebDriverWait(self.driver, 5)
             btn = wait.until(EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, 'div[data-testid="composer-content"] button[aria-haspopup="menu"]')
+                (By.CSS_SELECTOR, 'button[data-is-selected="true"]')
             ))
             text = btn.text.strip().lower()
-            if "2-3" in text: # Fast
-                return "fast"
-            elif "deeper" in text: # Think Deeper
-                return "think_deeper"
-            elif "gpt" in text: # GPT-5
-                return "gpt5"
-            elif "5-10" in text: # 实验室
-                return "lab"
+            if "study" in text or "学习" in text:  # Fast
+                return "study"
+            elif "think" in text or "思考" in text:  # Think Deeper
+                return "think"
+            elif "research" in text or "研究" in text:  # GPT-5
+                return "research"
             return "default"
-
         except Exception as e:
             return "default"
 
@@ -1328,32 +1331,44 @@ class PageAction:
         except:
             return False
 
-
-    def option_select_gpt5(self):
+    @error_retry(max_retries=2, recovery_methods=['auto_robots'], is_debug=False)
+    def option_select_model(self, model_name="think"):
         """
         选择chatgpt 5 模型
         """
+        # 点击切换模型按钮
+        wait = WebDriverWait(self.driver, 5)
         try:
-            # 点击切换模型按钮
-            wait = WebDriverWait(self.driver, 5)
             btn = wait.until(EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, 'div[data-testid="composer-content"] button[aria-haspopup="menu"]')
+                (By.CSS_SELECTOR, 'button[data-testid="composer-plus-btn"]')
             ))
-            self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
-            btn.click()
-
-            self.waiting(2)
-
-            # 选择gpt5 模型
-            gpt5btn = wait.until(EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, 'button[data-testid="smart-mode-option"]')
+        except:
+            btn = wait.until(EC.element_to_be_clickable(
+                (By.ID, 'system-hint-button')
             ))
-            self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", gpt5btn)
-            gpt5btn.click()
+        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+        btn.click()
 
-            return True
-        except Exception as e:
-            return False
+        self.waiting(2)
+        model_item = None
+        if model_name == "study":
+            model_item = wait.until(EC.element_to_be_clickable(
+                (By.XPATH, '//div[@role="menuitemradio" and (contains(normalize-space(.), "学习") or contains(normalize-space(.), "Study"))]')
+            ))
+        elif model_name == "think":
+            model_item = wait.until(EC.element_to_be_clickable(
+                (By.XPATH,
+                 '//div[@role="menuitemradio" and (contains(normalize-space(.), "思考") or contains(normalize-space(.), "Think"))]')
+            ))
+        elif model_name == "research":
+            model_item = wait.until(EC.element_to_be_clickable(
+                (By.XPATH,
+                 '//div[@role="menuitemradio" and (contains(normalize-space(.), "深度") or contains(normalize-space(.), "deep"))]')
+            ))
+        if model_item:
+            self.driver.execute_script("arguments[0].click();", model_item)
+
+        return True
 
 
     def get_local_storage_data(self):

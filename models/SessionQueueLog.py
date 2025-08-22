@@ -12,7 +12,7 @@ class SessionLogModel(BaseModel):
         # 要连接的数据库
         self.connection = "default"
         # 表名称
-        self.table_name = "copilot_account_log"
+        self.table_name = "%s_account_log" % gpt_conf.spider_name
 
 
     def add_log(self, account, browser_port, action_type, action_info, proxy_source_indexId, proxy_source_type, proxy_source_name):

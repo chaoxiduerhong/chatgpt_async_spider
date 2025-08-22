@@ -317,6 +317,7 @@ class GPTLogin(GPTBase):
         # 连续刷新三次获取
         retry_idx = 0
         while True:
+
             self.pageAction.auto_robots()
             self.pageAction.about_you_init()
             self.pageAction.auto_robots()

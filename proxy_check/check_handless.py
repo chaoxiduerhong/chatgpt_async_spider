@@ -66,9 +66,17 @@ class RequestThread(threading.Thread):
             proxy_port = current_proxy['port']
             proxy_address = f"{proxy_server}:{proxy_port}"
 
-            url = "https://copilot.microsoft.com/"
-            response = requests.get(url, verify=False,
-                                    proxies={"http": proxy_address, "https": proxy_address}, timeout=5)
+            url = "https://chatgpt.com"
+            headers = {
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+            }
+            proxies = {"http": proxy_address, "https": proxy_address}
+            response = requests.get(url,
+                                    verify=False,
+                                    proxies=proxies,
+                                    headers=headers,
+                                    timeout=5
+                                    )
             if response.status_code == 200:
                 return True
             return False

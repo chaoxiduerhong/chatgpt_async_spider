@@ -1,8 +1,9 @@
 # -*- coding:utf-8 -*-
 """
-负责爬取和提取答案 并行操作
-"""
+提问 * 详情提问
 
+"""
+from utils import error_retry
 import traceback
 import time
 import random
@@ -86,18 +87,17 @@ class GPTQuery(GPTBase):
         self.init_webbrowser()
         self.init_page_action()
 
-        # 进入页面
-        self.clear_localstorage_cache()
         # 如果 check_page 过久，可以取消该10s等待
-        self.sysLog.log("go to checking page")
-        if not self.pageAction.check_chat_page():
-            self.sysLog.log("check page failed, continue")
+        self.sysLog.log("go to chat page")
+        if not self.pageAction.switch_to_chat_page():
+            self.sysLog.log("chat page failed, continue")
             return False
 
+        # https://chatgpt.com/?model=auto
         # 自动化人工校验
-        if not self.pageAction.auto_robots():
-            self.sysLog.log("auto_robots failed, continue")
-            return False
+        # if not self.pageAction.auto_robots():
+        #     self.sysLog.log("auto_robots failed, continue")
+        #     return False
 
         # 登录
         if not self.auto_login():
@@ -105,10 +105,13 @@ class GPTQuery(GPTBase):
             return False
         self.sysLog.log("auto_login OK")
 
+        # 检测 现在开始吧按钮，并且点击
+        self.pageAction.auto_start_chat()
+
         # 自动化人工校验
-        if not self.pageAction.auto_robots():
-            self.sysLog.log("auto_robots failed, continue")
-            return False
+        # if not self.pageAction.auto_robots():
+        #     self.sysLog.log("auto_robots failed, continue")
+        #     return False
 
         # 检测页面
         # 如果 check_page 过久，可以取消该10s等待
@@ -119,14 +122,12 @@ class GPTQuery(GPTBase):
 
         # 设置 gpt 状态
         self.sysLog.log("set GPT5 Model")
-        if not self.pageAction.option_select_gpt5():
-            self.sysLog.log("option_select_gpt5 failed, continue")
-            return False
-
+        set_model_name = "think"
         current_mode_pre = self.pageAction.get_current_model()
-
-        self.pageAction.auto_robots()
-
+        if current_mode_pre != set_model_name:
+            if not self.pageAction.option_select_model(set_model_name):
+                self.sysLog.log("option_select_gpt5 failed, continue")
+                return False
         # 提问
         ask_msg = self.get_ask_msg_with_alternatives(product)
         start_time = utils.common.get_second_utime()
@@ -138,7 +139,9 @@ class GPTQuery(GPTBase):
             return False
         end_time = utils.common.get_second_utime()
 
+        # 避免中间弹出了人工校验
         self.pageAction.auto_robots()
+        time.sleep(5)
 
         # 保存提问结果
         request_full_url, url_session_uuid = self.get_url_uuid()
@@ -158,8 +161,6 @@ class GPTQuery(GPTBase):
                 "status": "success",
                 "duration": end_time - start_time,
             }
-            self.report_success_status()
-            self.save(data)
         else:
             data = {
                 "bid": product['bid'],
@@ -174,8 +175,9 @@ class GPTQuery(GPTBase):
                 "status": "invalid",
                 "duration": end_time - start_time,
             }
-            self.report_success_status()
-            self.save(data)
+
+        self.save(data)
+        self.report_success_status()
         MSession.open_ask_lock(self.session_key)
         return "continue"
 
@@ -203,12 +205,11 @@ class GPTQuery(GPTBase):
         while True:
             try:
                 if not self.init_browser():
-                    print(f"{self.browser_port} - 浏览器队列已经用尽！")
-                    time.sleep(300)
+                    print(f"{self.browser_port} - 初始化失败！")
+                    self.waiting(300)
                     continue
 
                 product = None
-
                 if not product:
                     product = self.productQueue.get_product()
 
@@ -216,18 +217,14 @@ class GPTQuery(GPTBase):
                     msg_title = "产品队列用尽通知"
                     msg_content = " 产品已经用尽，请尽快补充产品 "
                     self.sysLog.log(msg_content)
-                    self.host_report_status(f"copilot-query_detail-{gpt_conf.query_detail_mode}", "queue_empty", "产品已经用尽，请尽快补充产品")
-                    time.sleep(600)
+                    self.host_report_status(f"{gpt_conf.spider_name}-ask", "queue_empty", "产品已经用尽，请尽快补充产品")
+                    self.waiting(600)
                     continue
 
                 # 产品数据检测
                 if "bid" not in product or "product_name" not in product:
                     self.sysLog.log("check primary filed failed, next product...")
                     continue
-
-                # if len(product['product_name_len']) > 10:
-                #     self.sysLog.log("product name too long, len:%s" % len(product['product_name']))
-                #     continue
 
                 # 检测 std_content_obj  对应的内容是否存在
                 if "std_content_obj" not in product or not product["std_content_obj"] or gpt_conf.outline_ask_processing+1 > len(product["std_content_obj"]):
@@ -241,7 +238,7 @@ class GPTQuery(GPTBase):
 
                 self.sysLog.log("get product success, bid: %s" % product['bid'])
 
-                self.mark = "[bid:%s]" % (product['bid'], )
+                self.mark = "[bid:%s, outline:%s]" % (product['bid'], gpt_conf.outline_ask_processing)
                 self.sysLog.set_mark(self.mark)
 
 
@@ -263,9 +260,9 @@ class GPTQuery(GPTBase):
 
                 # 如果临时见到到代理失败，则重新获取新的代理。避免所有代理出现异常程序故障，需要sleep 120s
                 if not self.check_proxy_status():
-                    self.sysLog.log("check proxy status Failed switch proxy and sleep 120s...")
+                    self.sysLog.log("check proxy status Failed ，120s later switch proxy...")
+                    self.waiting(20)
                     self.going_restart(clear_cache=True, is_match_proxy=True)
-                    time.sleep(120)
                     continue
                 self.sysLog.log("check proxy status Okay, proceeding")
 
@@ -282,13 +279,13 @@ class GPTQuery(GPTBase):
                         print("连续大于10次，每次重启并且匹配代理")
                         # 连续超过10次，每次修改10分钟，并且切换代理
                         self.going_restart(clear_cache=True, is_match_proxy=True)
-                        time.sleep(600)
+                        self.waiting(600)
                     if self.get_resp_error_num > 15:
                         print("连续大于15次，重置状态。sleep 1h")
                         # 重置请求，并且直接sleep 1h
                         self.get_resp_error_num = 0
                         self.going_restart(clear_cache=True, is_match_proxy=True)
-                        time.sleep(3600)
+                        self.waiting(3600)
                 self.sysLog.log(f"check get_resp_error_num={self.get_resp_error_num} Okay, proceeding")
 
                 # 失败重试次数
@@ -309,13 +306,13 @@ class GPTQuery(GPTBase):
                         if gpt_conf.is_fixed_running_time and resp_status:
                             if left_ts > 0:
                                 self.sysLog.log("======>fixed sleep %s..." % left_ts)
-                                time.sleep(left_ts)
+                                self.waiting(left_ts)
                         break
                     except:
                         _sleep_ts = 30
                         self.sysLog.err_log("获取数据异常, 原因：%s" % (traceback.format_exc()))
                         self.sysLog.log(f"获取数据异常，重新尝试{err_retry}/5。 sleep {_sleep_ts}s")
-                        time.sleep(_sleep_ts)
+                        self.waiting(_sleep_ts)
 
                         if err_retry >= 4:
                             self.sysLog.log(
@@ -331,4 +328,4 @@ class GPTQuery(GPTBase):
                 print(traceback.format_exc())
                 self.sysLog.log(f"{self.browser_port} - 未知异常原因(while-true-Try/Exception)，程序等待10分钟再次运行。 ")
                 self.sysLog.err_log(f"{self.browser_port} - 未知异常原因，程序等待10分钟再次运行。Error:%s" % traceback.format_exc())
-                time.sleep(600)
+                self.waiting(600)

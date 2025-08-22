@@ -10,6 +10,7 @@ import os
 import re
 import nltk
 import platform
+import functools
 
 def get_rand_str(len=6):
     return ''.join(random.sample(string.digits + string.ascii_letters, len))
@@ -199,3 +200,47 @@ def get_sys_uname():
 def action_wait(mints=500, maxts=1000):
     milliseconds = random.randint(mints, maxts)
     sleep_ms(milliseconds)
+
+
+def error_retry(max_retries=2, recovery_methods=None, delay=0, is_debug=False):
+    """
+
+    遇到异常就会重试机制
+
+    :param max_retries: 最大尝试次数
+    :param recovery_methods: 出错后调用的恢复方法名列表（字符串），可为空
+    :param delay: 重试前等待秒数
+
+    执行成功，返回函数本身返回的内容
+    执行失败，返回False
+    """
+    recovery_methods = recovery_methods or []
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempt = 0
+            while attempt < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempt += 1
+                    if attempt >= max_retries:
+                        if is_debug:
+                            print(f"[ERROR] {func.__name__} 尝试了 {attempt}次， 最终失败，异常: {e}")
+                            raise
+                        else:
+                            print(f"[ERROR] {func.__name__} 尝试了 {attempt}次， 最终失败")
+                        return False
+                    else:
+                        if len(args) > 0 and recovery_methods:
+                            instance = args[0]  # 获取 self
+                            for method_name in recovery_methods:
+                                if hasattr(instance, method_name):
+                                    getattr(instance, method_name)()
+                        if delay > 0:
+                            time.sleep(delay)
+
+        return wrapper
+
+    return decorator

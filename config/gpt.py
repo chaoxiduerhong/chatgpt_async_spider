@@ -58,10 +58,13 @@ class gptConf:
     # 异步获取产品
     product_table_result_failed_async = env("PRODUCT_FAILED_ASYNC_RESULT_TABLE", "product_%s_failed_async" % spider_name)
 
+    # 当前批次
+    outline_ask_processing = int(env("deep_app_processing", 0))
+
     # 爬取产品结果成功表
-    product_table_result = env("PRODUCT_RESULT_TABLE", "product_%s_sm" % spider_name)
+    product_table_result = env("PRODUCT_RESULT_TABLE", "product_%s_sm" % spider_name).replace("{idx}", str(outline_ask_processing))
     # 将所有的数据整合到一起 合并表
-    product_table_result_full = env("PRODUCT_RESULT_TABLE_FULL", "product_ast_bench_outline_detail_full")
+    product_table_result_full = env("PRODUCT_RESULT_TABLE_FULL", "product_ast_bench_outline_detail_full").replace("{idx}", str(outline_ask_processing))
 
     # 避免重复多次爬取同一个链接。这里将已经爬取到的存储到数据库中
     product_table_result_urls = env("PRODUCT_RESULT_TABLE_URLS", "google_ast_urls")
@@ -183,9 +186,6 @@ class gptConf:
     # waiting  未触发登录验证码的账号
     # disabled 触发过登录验证码的账号
     login_status_mode = env("login_status_mode", "waiting")
-
-    # 当前批次
-    outline_ask_processing = int(env("deep_app_processing", 0))
 
     # 是否开启账号活动记录
     enable_account_log = bool(int(env("enable_account_log", 0)))

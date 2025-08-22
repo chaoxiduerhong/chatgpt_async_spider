@@ -6,7 +6,7 @@ from threading import Lock
 import time
 
 from models import MProductsResult
-from spider.GPTRobotsQueryDetails import GPTQuery as GPTRobots
+from spider.GPTRobotsAsk import GPTQuery as GPTRobots
 from config import browser_conf
 
 thread_lock = Lock()
