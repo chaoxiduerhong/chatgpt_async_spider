@@ -56,14 +56,18 @@ class GPTFetch(GPTBase):
         data['url'] = gpt_conf.url
         data['browser_port'] = self.browser_port
         data['hostname'] = utils.common.get_sys_uname()
-        MProductsResult.add_one(data)
-        self.sysLog.log("save data success, bid:%s" % data['bid'])
+        if "bid" in data:
+            bid = data['bid']
+
+        MProductsResult.update_one(condition={"bid": bid}, data=data)
+        self.sysLog.log("save data success, bid:%s" % bid)
 
     def save_invalid_product(self, bid):
         """
         设置产品为无效的产品
         """
         data = {
+            "bid":bid,
             "answer": "",
             "duration_async": 0,
             "text_length": 0,
@@ -86,13 +90,35 @@ class GPTFetch(GPTBase):
             try:
                 chat_list = res['mapping']
                 for key in chat_list:
-                    author = chat_list[key]['message']['author']
-                    content_type = chat_list[key]['message']['content']['type']
-                    content = chat_list[key]['message']['parts'][0]
-                    complete_status = chat_list[key]['message']['status']
-                    metadata = chat_list[key]['message']['metadata']
-                    current_model = chat_list[key]['message']['metadata']['model_slug']
-                    if "role" in author and str(author['role']).lower() == "assistant" and content_type == "text":
+                    try:
+                        author = chat_list[key]['message']['author']
+                    except:
+                        author = None
+                    try:
+                        content_type = chat_list[key]['message']['content']['content_type']
+                    except:
+                        content_type = None
+                    try:
+                        content = chat_list[key]['message']['content']['parts'][0]
+                    except:
+                        content = None
+
+                    try:
+                        complete_status = chat_list[key]['message']['status']
+                    except:
+                        complete_status = None
+
+                    try:
+                        metadata = chat_list[key]['message']['metadata']
+                    except:
+                        metadata = None
+
+                    try:
+                        current_model = chat_list[key]['message']['metadata']['model_slug']
+                    except:
+                        current_model = None
+
+                    if author and "role" in author and author['role'] and str(author['role']).lower() == "assistant" and content_type and content_type == "text":
                         return {
                             "gpt_model": current_model,
                             "content": content,
@@ -100,10 +126,33 @@ class GPTFetch(GPTBase):
                             "metadata": metadata,
                         }
             except:
+                print("parse_content ERROR",traceback.format_exc())
                 return None
 
             return None
 
+        def get_auth_Bearer():
+            """
+            获取 Header  Authorization: Bearer 值
+            """
+            url = "https://chatgpt.com/api/auth/session"
+            script = '''
+                const callback = arguments[arguments.length - 1];
+                fetch("%s", {
+                    method: "GET",
+                    headers: {
+                        "accept": "*/*",
+                        "accept-language": "zh-CN,zh;q=0.9"
+                      },
+                    credentials: "include"
+                })
+                .then(response => response.json())
+                .then(data => callback(data))
+                .catch(error => callback({error: error.toString()}));
+                ''' % (url, )
+            self.driver.set_script_timeout(10)
+            result = self.driver.execute_async_script(script)
+            return result['accessToken']
 
         answer_content = None
         refs = {}
@@ -117,7 +166,7 @@ class GPTFetch(GPTBase):
             fetch("%s", {
                 method: "GET",
                 headers: {
-                    "accept": "application/json",
+                    "accept": "*/*",
                     "accept-language": "zh-CN,zh;q=0.9",
                     'Authorization': 'Bearer %s',
                   },
@@ -126,12 +175,14 @@ class GPTFetch(GPTBase):
             .then(response => response.json())
             .then(data => callback(data))
             .catch(error => callback({error: error.toString()}));
-            ''' % (url, self.session_token)
+            ''' % (url, get_auth_Bearer())
+
+        self.sysLog.log(f"Fetch:get-result():script={script}")
         # 设置最大请求超时时间
         self.driver.set_script_timeout(10)
         result = self.driver.execute_async_script(script)
         self.sysLog.log(f"Fetch:get-result():result={result}")
-        time.sleep(11)
+        self.waiting(5)
         if "mapping" not in result:
             return {
                 "status": False,
@@ -153,12 +204,11 @@ class GPTFetch(GPTBase):
 
         # 获取模型
         if "gpt_model" in message and message["gpt_model"]:
-            current_mode.append("search_enabled")
-
+            current_mode=message["gpt_model"]
 
         refs = message['metadata'] if "metadata" in message else {}
 
-        content_complete_status = message['content_complete_status'] if "content_complete_status" in message else {}
+        content_complete_status = message['status'] if "status" in message else None
 
         answer_content = message['content'] if 'content' in message else None
 
@@ -203,11 +253,14 @@ class GPTFetch(GPTBase):
         self.sysLog.log("go to chat page")
         if not self.pageAction.switch_to_chat_page():
             self.sysLog.log("chat page failed, continue")
+            self.going_restart(clear_cache=False, is_match_proxy=True)
+            self.get_resp_error_num = 0
             return False
 
         # 登录
         if not self.auto_login(product['account']):
             self.sysLog.log("auto_login failed，continue")
+            self.get_resp_error_num = 0
             return False
         self.sysLog.log("auto_login OK")
 
@@ -218,7 +271,9 @@ class GPTFetch(GPTBase):
         # 如果 check_page 过久，可以取消该10s等待
         self.sysLog.log("go to checking page")
         if not self.pageAction.check_chat_page():
-            self.sysLog.log("check page failed, continue")
+            self.sysLog.log("check page failed, restart browser and switch proxy ... continue")
+            self.going_restart(clear_cache=False, is_match_proxy=True)
+            self.get_resp_error_num = 0
             return False
 
         start_time = utils.common.get_second_utime()

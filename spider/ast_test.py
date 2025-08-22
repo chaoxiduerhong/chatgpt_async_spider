@@ -1397,6 +1397,23 @@ def check_login_auth():
     return False
 
 
+def get_login_session(driver=None):
+    """
+    检测是否已经登录
+    """
+    try:
+        if not driver:
+            driver = get_driver(9700)
+        cookies = driver.get_cookies()
+        for cookie in cookies:
+            if cookie['name'] == "__Secure-next-auth.session-token":
+                return cookie['value']
+        return None
+    except:
+        print("check_login_auth error")
+    return None
+
+
 def login_step_check_interrupt():
     """
     是否开启人脸 指纹等识别校验
@@ -1525,6 +1542,154 @@ def auto_start_chat():
         print(traceback.format_exc())
         return False
 
-auto_start_chat()
+
+def get_result():
+    """
+    通过接口检测接口是否有效
+    直接在页面请求，无需再次设置cookie信息（浏览器会自带）
+    # TODO
+    """
+    driver = get_driver(9600)
+    request_url_uuid = "68a7bd8a-2030-8322-bdce-a0f9420df24d"
+    def parse_content(res):
+        """
+        解析内容
+        """
+        try:
+            chat_list = res['mapping']
+            for key in chat_list:
+                try:
+                    author = chat_list[key]['message']['author']
+                except:
+                    author = None
+                try:
+                    content_type = chat_list[key]['message']['content']['content_type']
+                except:
+                    content_type = None
+                try:
+                    content = chat_list[key]['message']['content']['parts'][0]
+                except:
+                    content = None
+
+                try:
+                    complete_status = chat_list[key]['message']['status']
+                except:
+                    complete_status = None
+
+                try:
+                    metadata = chat_list[key]['message']['metadata']
+                except:
+                    metadata = None
+
+                try:
+                    current_model = chat_list[key]['message']['metadata']['model_slug']
+                except:
+                    current_model = None
+                if author and "role" in author and author['role'] and str(author['role']).lower() == "assistant" and content_type and content_type == "text":
+                    return {
+                        "gpt_model": current_model,
+                        "content": content,
+                        "complete_status": complete_status,
+                        "metadata": metadata,
+                    }
+        except:
+            print(traceback.format_exc())
+            return None
+
+        return None
+
+    def get_auth_Bearer():
+        """
+        获取 Header  Authorization: Bearer 值
+        """
+        url = "https://chatgpt.com/api/auth/session"
+        script = '''
+            const callback = arguments[arguments.length - 1];
+            fetch("%s", {
+                method: "GET",
+                headers: {
+                    "accept": "*/*",
+                    "accept-language": "zh-CN,zh;q=0.9"
+                  },
+                credentials: "include"
+            })
+            .then(response => response.json())
+            .then(data => callback(data))
+            .catch(error => callback({error: error.toString()}));
+            ''' % (url,)
+        driver.set_script_timeout(10)
+        result = driver.execute_async_script(script)
+        return result['accessToken']
+
+    answer_content = None
+    refs = {}
+    error = None
+    current_mode = ["default"]
+    content_complete_status = None
+    url = "https://chatgpt.com/backend-api/conversation/%s" % request_url_uuid
+    script = '''
+        const callback = arguments[arguments.length - 1];
+        fetch("%s", {
+            method: "GET",
+            headers: {
+                "accept": "*/*",
+                "accept-language": "zh-CN,zh;q=0.9",
+                'Authorization': 'Bearer %s',
+              },
+            credentials: "include"
+        })
+        .then(response => response.json())
+        .then(data => callback(data))
+        .catch(error => callback({error: error.toString()}));
+        ''' % (url, get_auth_Bearer())
+
+    # 设置最大请求超时时间
+    driver.set_script_timeout(10)
+    result = driver.execute_async_script(script)
+    if "mapping" not in result:
+        return {
+            "status": False,
+            "error": json.dumps(result),
+            "answer": answer_content,
+            'refs': refs,
+            'current_mode': current_mode
+        }
+
+    message = parse_content(result)
+    if not message:
+        return {
+            "status": False,
+            "error": "not parse content",
+            "answer": answer_content,
+            'refs': refs,
+            'current_mode': current_mode
+        }
+
+    # 获取模型
+    if "gpt_model" in message and message["gpt_model"]:
+        current_mode.append("search_enabled")
+
+    refs = message['metadata'] if "metadata" in message else {}
+
+    content_complete_status = message['content_complete_status'] if "content_complete_status" in message else {}
+
+    answer_content = message['content'] if 'content' in message else None
+
+    status = False
+    if answer_content:
+        status = True
+    else:
+        error = "parse_content_error"
+    return {
+        "status": status,
+        "answer": answer_content,
+        'refs': refs,
+        'error': error,
+        'current_mode': current_mode,
+        "content_complete_status": content_complete_status
+    }
+
+
+print(get_result())
 print("end")
 time.sleep(100000)

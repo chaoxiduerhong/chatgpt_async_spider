@@ -12,7 +12,7 @@ import traceback
 import threading
 
 from proxy_check import start as proxy_check_start
-from spider import server, login_start, ask_start
+from spider import server, login_start, ask_start, fetch_start
 
 mark = sys.argv[1]
 if len(sys.argv) > 2:
@@ -43,6 +43,9 @@ if __name__ == "__main__":
 
         if mark == "ask":
             ask_start(mode)
+
+        if mark == "fetch":
+            fetch_start(mode)
 
         if mark == "login":
             login_start(mode)

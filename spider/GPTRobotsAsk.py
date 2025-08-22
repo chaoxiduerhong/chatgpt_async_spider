@@ -91,6 +91,7 @@ class GPTQuery(GPTBase):
         self.sysLog.log("go to chat page")
         if not self.pageAction.switch_to_chat_page():
             self.sysLog.log("chat page failed, continue")
+            self.get_resp_error_num = self.get_resp_error_num + 1
             return False
 
         # https://chatgpt.com/?model=auto
@@ -117,7 +118,9 @@ class GPTQuery(GPTBase):
         # 如果 check_page 过久，可以取消该10s等待
         self.sysLog.log("go to checking page")
         if not self.pageAction.check_chat_page():
-            self.sysLog.log("check page failed, continue")
+            self.sysLog.log("check page failed, restart and continue")
+            self.get_resp_error_num = self.get_resp_error_num + 1
+            self.going_restart(clear_cache=False, is_match_proxy=True)
             return False
 
         # 设置 gpt 状态
@@ -126,6 +129,7 @@ class GPTQuery(GPTBase):
         current_mode_pre = self.pageAction.get_current_model()
         if current_mode_pre != set_model_name:
             if not self.pageAction.option_select_model(set_model_name):
+                self.get_resp_error_num = self.get_resp_error_num + 1
                 self.sysLog.log("option_select_gpt5 failed, continue")
                 return False
         # 提问
@@ -133,6 +137,7 @@ class GPTQuery(GPTBase):
         start_time = utils.common.get_second_utime()
         ask_status = self.ask_js(ask_msg)
         if not ask_status:
+            self.get_resp_error_num = self.get_resp_error_num + 1
             self.sysLog.log("ask_js failed, continue")
             day_count_info = MSession.lock_ask_failed_update_day_count(self.session_key)
             print("------》 处理之前day_count_info信息为", day_count_info)
@@ -267,13 +272,13 @@ class GPTQuery(GPTBase):
                 self.sysLog.log("check proxy status Okay, proceeding")
 
                 # 故障重试机制： 连续失败n次后会触发一些处理事件
-                if self.get_resp_error_num >= 5:
-                    if self.get_resp_error_num == 5:
+                if self.get_resp_error_num >= 3:
+                    if self.get_resp_error_num == 3:
                         print("连续失败5次，重启并且匹配代理")
                         self.going_restart(clear_cache=True, is_match_proxy=True)
                     else:
                         print("连续大于5次，每次重启")
-                        self.going_restart(clear_cache=True)
+                        self.going_restart(clear_cache=True, is_match_proxy=True)
 
                     if 10 <= self.get_resp_error_num <= 15:
                         print("连续大于10次，每次重启并且匹配代理")

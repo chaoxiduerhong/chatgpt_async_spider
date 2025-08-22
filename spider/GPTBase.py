@@ -294,7 +294,7 @@ class GPTBase:
                         )
 
                     try:
-                        session_token = session_response['session']
+                        # session_token = session_response['session']
                         self.sysLog.log("获取到下发的账号 account:%s; data_type:%s" % (session_response['session_key'], session_response['data_type']))
 
                         if self.check_session_token(session_response):

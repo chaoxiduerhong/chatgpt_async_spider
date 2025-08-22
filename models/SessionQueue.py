@@ -225,6 +225,25 @@ class SessionModel(BaseModel):
             return None
 
     def lock_get_session_issue_account(self, account):
+        """
+        return {
+                "session": session_info,
+                "localstorage_data": session_info,
+                "cookie_data": cookie_info,
+                "hostname": hostname,
+                "browser_port": browser_port,
+                "batch": batch,
+                "session_key": res['account'],
+                "data_type": data_type,
+                "account_proxy_port": res['proxy_port'] if "proxy_port" in res else None,
+                "ask_last_time": res['ask_last_time'] if "ask_last_time" in res else None,
+                "account": res['account'],
+                "day_count": res['day_count'],
+                "email": res['email'] if "email" in res else None,
+                # 是否生产过的账号，如果success成功过，> 2 则设置为true，否则为false
+                "is_prod_account": is_prod_account,
+            }
+        """
         account = str(account)
         condition = {
             "account": account
@@ -233,9 +252,19 @@ class SessionModel(BaseModel):
         if not res:
             return None
         session_info = res['localstorage_data_first']
+
+        try:
+            cookie_info = res['cookie_data_last'] if "cookie_data_last" in res else res['cookie_data_first']
+        except:
+            cookie_info = None
+
         return {
+            "localstorage_data": session_info,
+            "cookie_data": cookie_info,
             "session": session_info,
-            "session_key": res['account']
+            "session_key": res['account'],
+            "data_type": "by_account",
+
         }
 
     def save_session_issue(self, condition, hostname, browser_port, proxy_port, is_init_day_count=False):
